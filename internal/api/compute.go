@@ -29,9 +29,9 @@ func NewComputeHandler(e engine.Engine, s store.Store, a authenticator.Authentic
 }
 
 func (h *ComputeHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/compute/upload", h.HandleUpload)
-	mux.HandleFunc("POST /api/compute", h.HandleCreate)
-	mux.HandleFunc("DELETE /api/compute/{id}", h.HandleDelete)
+	mux.Handle("POST /api/compute/upload", h.AuthMiddleware(http.HandlerFunc(h.HandleUpload)))
+	mux.Handle("POST /api/compute", h.AuthMiddleware(http.HandlerFunc(h.HandleCreate)))
+	mux.Handle("DELETE /api/compute/{id}", h.AuthMiddleware(http.HandlerFunc(h.HandleDelete)))
 }
 
 type UploadRequest struct {
