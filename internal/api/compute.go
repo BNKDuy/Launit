@@ -1,22 +1,30 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"orchestrator/internal/authenticator"
 	"orchestrator/internal/engine"
 	"orchestrator/internal/store"
 	"strings"
 )
 
+type contextKey string
+
+const UsernameKey contextKey = "username"
+
 type ComputeHandler struct {
-	engine engine.Engine
-	store  store.Store
+	engine        engine.Engine
+	store         store.Store
+	authenticator authenticator.Authenticator
 }
 
-func NewComputeHandler(engine engine.Engine, store store.Store) *ComputeHandler {
+func NewComputeHandler(e engine.Engine, s store.Store, a authenticator.Authenticator) *ComputeHandler {
 	return &ComputeHandler{
-		engine: engine,
-		store:  store,
+		engine:        e,
+		store:         s,
+		authenticator: a,
 	}
 }
 
@@ -29,6 +37,35 @@ func (h *ComputeHandler) RegisterRoutes(mux *http.ServeMux) {
 type UploadRequest struct {
 	Username     string `json:"username"`
 	FunctionName string `json:"name"`
+}
+
+func (h *ComputeHandler) AuthMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		authHeader := r.Header.Get("Authorization")
+		if authHeader == "" {
+			http.Error(w, "Unauthorized: Missing Authorization header", http.StatusUnauthorized)
+			return
+		}
+
+		// Parse out the token from the "Bearer <token>" format
+		parts := strings.Split(authHeader, " ")
+		if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
+			http.Error(w, "Unauthorized: Invalid Authorization format. Use 'Bearer <token>'", http.StatusUnauthorized)
+			return
+		}
+		token := parts[1]
+
+		username, err := h.authenticator.Authenticate(r.Context(), token)
+		if err != nil {
+			http.Error(w, "Unauthorized: Invalid or expired token", http.StatusUnauthorized)
+			return
+		}
+
+		// Inject the username into the request Context
+		ctx := context.WithValue(r.Context(), UsernameKey, username)
+
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
 }
 
 func (h *ComputeHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
