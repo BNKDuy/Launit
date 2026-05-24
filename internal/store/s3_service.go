@@ -31,6 +31,10 @@ func NewS3Service(s3Client *s3.Client, bucketName string, uploadExpiry time.Dura
 
 var _ Store = (*S3Service)(nil)
 
+func (s *S3Service) GetKey(username, functionName string) string {
+	return fmt.Sprintf("code/%s/%s.zip", username, functionName)
+}
+
 // Generate a presigned upload url
 func (s *S3Service) GenerateUploadURL(ctx context.Context, key string) (string, error) {
 	input := &s3.PutObjectInput{

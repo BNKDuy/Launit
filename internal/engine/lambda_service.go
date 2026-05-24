@@ -30,7 +30,7 @@ func NewLambdaService(client *lambda.Client, bucket string, role string) *Lambda
 
 var _ Engine = (*LambdaService)(nil)
 
-func (l *LambdaService) Create(ctx context.Context, name string, memory int32, runtime string, binaryURI string) (string, error) {
+func (l *LambdaService) Create(ctx context.Context, name string, memory int32, runtime string, timeout int32, binaryURI string) (string, error) {
 	if memory < MIN_MEMORY || memory > MAX_MEMORY {
 		log.Println("Failed to create lambda function: Invalid memory input: ", memory)
 		return "", fmt.Errorf("Invalid memory input")
@@ -43,7 +43,7 @@ func (l *LambdaService) Create(ctx context.Context, name string, memory int32, r
 		Role: aws.String(l.executionRole),
 
 		Runtime:    types.RuntimeProvidedal2023,
-		Timeout:    aws.Int32(10),
+		Timeout:    aws.Int32(timeout),
 		MemorySize: aws.Int32(memory),
 		Handler:    aws.String("bootstrap"),
 
