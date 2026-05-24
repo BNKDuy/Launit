@@ -6,12 +6,15 @@ import (
 	"log"
 	"net/http"
 	"orchestrator/internal/api"
+	"orchestrator/internal/authenticator"
+	"orchestrator/internal/db"
 	"orchestrator/internal/engine"
 	"orchestrator/internal/store"
 	"os"
 	"time"
 
 	"github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/service/dynamodb"
 	"github.com/aws/aws-sdk-go-v2/service/lambda"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/joho/godotenv"
@@ -25,6 +28,7 @@ func main() {
 
 	port := os.Getenv("PORT")
 	codeBucket := os.Getenv("CODE_BUCKET")
+	dynamoTable := os.Getenv("DYNAMO_TABLE")
 	lambdaExecutionRole := os.Getenv("LAMBDA_EXECUTION_ROLE_ARN")
 
 	cfg, err := config.LoadDefaultConfig(context.TODO())
@@ -44,9 +48,13 @@ func main() {
 		5*time.Minute,
 	)
 
+	tokenRepo := db.NewDynamoTokenRepository(dynamodb.NewFromConfig(cfg), dynamoTable)
+
+	authenticator := authenticator.NewTokenAuthenticator(tokenRepo)
+
 	mux := http.NewServeMux()
 
-	computeHandler := api.NewComputeHandler(engine, store)
+	computeHandler := api.NewComputeHandler(engine, store, authenticator)
 	computeHandler.RegisterRoutes(mux)
 
 	fmt.Printf("Starting server on :%s\n", port)
