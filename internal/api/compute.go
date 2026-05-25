@@ -34,11 +34,6 @@ func (h *ComputeHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("DELETE /api/compute/{id}", h.AuthMiddleware(http.HandlerFunc(h.HandleDelete)))
 }
 
-type UploadRequest struct {
-	Username     string `json:"username"`
-	FunctionName string `json:"name"`
-}
-
 func (h *ComputeHandler) AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -68,14 +63,18 @@ func (h *ComputeHandler) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+type UploadRequest struct {
+	FunctionName string `json:"name"`
+}
+
 func (h *ComputeHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 	var req UploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 	}
 
-	name := req.Username
-	username := req.FunctionName
+	name := req.FunctionName
+	username := h.getUsernameFromContext(r.Context())
 	key := h.store.GetKey(username, name)
 
 	presignedUrl, err := h.store.GenerateUploadURL(r.Context(), key)
@@ -92,12 +91,11 @@ func (h *ComputeHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 }
 
 type CreateRequest struct {
-	Username string `json:"username"`
-	Name     string `json:"name"`
-	Memory   int32  `json:"memory"`
-	Runtime  string `json:"runtime"`
-	Timeout  int32  `json:"timeout"`
-	UploadID string `json:"upload_id"`
+	FunctionName string `json:"name"`
+	Memory       int32  `json:"memory"`
+	Runtime      string `json:"runtime"`
+	Timeout      int32  `json:"timeout"`
+	UploadID     string `json:"upload_id"`
 }
 
 func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
@@ -107,7 +105,7 @@ func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	name := strings.TrimSpace(req.Name)
+	name := strings.TrimSpace(req.FunctionName)
 	if name == "" {
 		http.Error(w, "The name of the function cannot be empty", http.StatusBadRequest)
 		return
@@ -127,7 +125,8 @@ func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 
 	runtime := req.Runtime
 	timeout := req.Timeout
-	username := req.Username
+
+	username := h.getUsernameFromContext(r.Context())
 
 	uri := h.store.GetKey(username, name)
 
@@ -143,7 +142,6 @@ func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 
 type DeleteRequest struct {
 	FunctionName string `json:"function_name"`
-	Username     string `json:"username"`
 }
 
 func (h *ComputeHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
@@ -170,4 +168,11 @@ func (h *ComputeHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("Function successfully taken down!"))
+}
+
+func (h *ComputeHandler) getUsernameFromContext(ctx context.Context) string {
+	if username, ok := ctx.Value(UsernameKey).(string); ok {
+		return username
+	}
+	return ""
 }

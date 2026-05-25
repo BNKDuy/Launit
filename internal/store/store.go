@@ -5,7 +5,7 @@ import (
 )
 
 type Store interface {
-	GetKey(username, functionName string, version int64) string
+	GetKey(username, functionName string) string
 	GenerateUploadURL(ctx context.Context, key string) (string, error)
 	Exists(ctx context.Context, key string) (bool, error)
 	Delete(ctx context.Context, key string) error
