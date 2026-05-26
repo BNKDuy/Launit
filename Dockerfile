@@ -30,7 +30,7 @@ COPY --from=server /app/server ./server
 COPY --from=cloudflare-tunnel /usr/local/bin/cloudflared /usr/local/bin/cloudflared
 
 RUN echo '#!/bin/sh \n\
-./backend-api & \n\
+./server & \n\
 exec /usr/local/bin/cloudflared tunnel \n\
   --protocol quic \n\
   --edge-ip-version 6 \n\
