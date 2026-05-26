@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
 	"time"
@@ -11,8 +12,34 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/lambda/types"
 )
 
-const MAX_MEMORY int32 = 10 << 10
-const MIN_MEMORY int32 = 128
+type instanceSize string
+
+const (
+	XS instanceSize = "xs"
+	S  instanceSize = "s"
+	M  instanceSize = "m"
+	L  instanceSize = "l"
+)
+
+func (s instanceSize) getSize() (int32, bool) {
+	switch s {
+	case XS:
+		return 128, true
+	case S:
+		return 256, true
+	case M:
+		return 512, true
+	case L:
+		return 1024, true
+	default:
+		return 0, false
+	}
+}
+
+const (
+	MAX_MEMORY int32 = 10 << 10
+	MIN_MEMORY int32 = 128
+)
 
 type LambdaService struct {
 	client        *lambda.Client
@@ -30,10 +57,10 @@ func NewLambdaService(client *lambda.Client, bucket string, role string) *Lambda
 
 var _ Engine = (*LambdaService)(nil)
 
-func (l *LambdaService) Create(ctx context.Context, name string, memory int32, runtime string, timeout int32, binaryURI string) (string, error) {
-	if memory < MIN_MEMORY || memory > MAX_MEMORY {
-		log.Println("Failed to create lambda function: Invalid memory input: ", memory)
-		return "", fmt.Errorf("Invalid memory input")
+func (l *LambdaService) Create(ctx context.Context, name string, size string, runtime string, timeout int32, binaryURI string) (string, error) {
+	memory, valid := instanceSize(size).getSize()
+	if !valid {
+		return "", errors.New("invalid instance size")
 	}
 
 	function, err := l.client.CreateFunction(ctx, &lambda.CreateFunctionInput{

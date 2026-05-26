@@ -5,7 +5,7 @@ import (
 )
 
 type Engine interface {
-	Create(ctx context.Context, name string, memory int32, runtime string, timeout int32, binaryURI string) (string, error)
+	Create(ctx context.Context, name string, size string, runtime string, timeout int32, binaryURI string) (string, error)
 	Update(ctx context.Context, name string, binaryURI string) error
 	Delete(ctx context.Context, name string) error
 	List(ctx context.Context) ([]Function, error)
