@@ -17,7 +17,7 @@ type AppConfig struct {
 	Runtime string `yaml:"runtime"`
 	Path    string `yaml:"path"`
 	Size    string `yaml:"size"`
-	Timeout string `yaml:"timeout"`
+	Timeout int32  `yaml:"timeout"`
 }
 
 type CliConfig interface {
@@ -40,7 +40,7 @@ func (c *YamlCliConfig) GetTemplateBytes() ([]byte, error) {
 			Runtime: "go",
 			Path:    "./main.go",
 			Size:    "small",
-			Timeout: "30s",
+			Timeout: 30,
 		},
 	}
 
