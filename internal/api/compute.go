@@ -12,7 +12,12 @@ import (
 
 type contextKey string
 
-const UsernameKey contextKey = "username"
+const (
+	UsernameKey           contextKey = "username"
+	ComputeUploadEndpoint string     = "/api/compute/upload"
+	ComputeCreateEndpoint string     = "/api/compute"
+	ComputeDeleteEndpoint string     = "/api/compute/{id}"
+)
 
 type ComputeHandler struct {
 	engine        engine.Engine
@@ -29,9 +34,9 @@ func NewComputeHandler(e engine.Engine, s store.Store, a authenticator.Authentic
 }
 
 func (h *ComputeHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("POST /api/compute/upload", h.AuthMiddleware(http.HandlerFunc(h.HandleUpload)))
-	mux.Handle("POST /api/compute", h.AuthMiddleware(http.HandlerFunc(h.HandleCreate)))
-	mux.Handle("DELETE /api/compute/{id}", h.AuthMiddleware(http.HandlerFunc(h.HandleDelete)))
+	mux.Handle("POST "+ComputeUploadEndpoint, h.AuthMiddleware(http.HandlerFunc(h.HandleUpload)))
+	mux.Handle("POST "+ComputeCreateEndpoint, h.AuthMiddleware(http.HandlerFunc(h.HandleCreate)))
+	mux.Handle("DELETE "+ComputeDeleteEndpoint, h.AuthMiddleware(http.HandlerFunc(h.HandleDelete)))
 }
 
 func (h *ComputeHandler) AuthMiddleware(next http.Handler) http.Handler {
@@ -63,14 +68,21 @@ func (h *ComputeHandler) AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-type UploadRequest struct {
-	FunctionName string `json:"name"`
+type uploadRequest struct {
+	FunctionName string `json:"1"`
+}
+
+func newUploadRequest(functionName string) *uploadRequest {
+	return &uploadRequest{
+		FunctionName: functionName,
+	}
 }
 
 func (h *ComputeHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
-	var req UploadRequest
+	var req uploadRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
 	}
 
 	name := req.FunctionName
@@ -83,19 +95,27 @@ func (h *ComputeHandler) HandleUpload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
+	res := newPresignedUrlResponse(presignedUrl)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
-		"upload_url": presignedUrl,
-	})
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(res)
 }
 
 type CreateRequest struct {
-	FunctionName string `json:"name"`
-	Memory       int32  `json:"memory"`
-	Runtime      string `json:"runtime"`
-	Timeout      int32  `json:"timeout"`
-	UploadID     string `json:"upload_id"`
+	FunctionName string `json:"1"`
+	Size         string `json:"2"`
+	Runtime      string `json:"3"`
+	Timeout      int32  `json:"4"`
+}
+
+func newCreateRequest(functionName, size, runtime string, timeout int32) *CreateRequest {
+	return &CreateRequest{
+		FunctionName: functionName,
+		Size:         size,
+		Runtime:      runtime,
+		Timeout:      timeout,
+	}
 }
 
 func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
@@ -111,18 +131,7 @@ func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Make sure the memory is within limit
-	memory := req.Memory
-	if memory < engine.MIN_MEMORY || memory > engine.MAX_MEMORY {
-		if memory < engine.MIN_MEMORY {
-			http.Error(w, "Invalid function memory: The memory cannot be less than 128MB", http.StatusBadRequest)
-		} else {
-			http.Error(w, "Invalid function memory: The memory cannot exceed 10GB", http.StatusBadRequest)
-		}
-
-		return
-	}
-
+	size := req.Size
 	runtime := req.Runtime
 	timeout := req.Timeout
 
@@ -130,28 +139,21 @@ func (h *ComputeHandler) HandleCreate(w http.ResponseWriter, r *http.Request) {
 
 	uri := h.store.GetKey(username, name)
 
-	url, err := h.engine.Create(r.Context(), name, memory, runtime, timeout, uri)
+	url, err := h.engine.Create(r.Context(), name, size, runtime, timeout, uri)
 	if err != nil {
 		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 		return
 	}
 
-	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(url))
-}
+	res := newCreateResponse(url)
 
-type DeleteRequest struct {
-	FunctionName string `json:"function_name"`
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(res)
 }
 
 func (h *ComputeHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
-	var req DeleteRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
-		return
-	}
-
-	name := strings.TrimSpace(req.FunctionName)
+	name := strings.TrimSpace(r.PathValue("id"))
 	if len(name) == 0 || len(name) > 16 {
 		if len(name) == 0 {
 			http.Error(w, "Function name cannot be empty", http.StatusBadRequest)
@@ -164,6 +166,7 @@ func (h *ComputeHandler) HandleDelete(w http.ResponseWriter, r *http.Request) {
 	if err := h.engine.Delete(r.Context(), name); err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
 		w.Write([]byte("Failed to delete function!"))
+		return
 	}
 
 	w.WriteHeader(http.StatusOK)
