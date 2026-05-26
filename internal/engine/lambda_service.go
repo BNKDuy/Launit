@@ -15,10 +15,13 @@ import (
 type instanceSize string
 
 const (
-	XS instanceSize = "xs"
-	S  instanceSize = "s"
-	M  instanceSize = "m"
-	L  instanceSize = "l"
+	XS   instanceSize = "xs"
+	S    instanceSize = "s"
+	M    instanceSize = "m"
+	L    instanceSize = "l"
+	XL   instanceSize = "xl"
+	XXL  instanceSize = "xxl"
+	XXXL instanceSize = "xxxl"
 )
 
 func (s instanceSize) getSize() (int32, bool) {
@@ -31,6 +34,12 @@ func (s instanceSize) getSize() (int32, bool) {
 		return 512, true
 	case L:
 		return 1024, true
+	case XL:
+		return 2048, true
+	case XXL:
+		return 4096, true
+	case XXXL:
+		return 8192, true
 	default:
 		return 0, false
 	}
